@@ -1,1 +1,51 @@
 @import "tailwindcss";
+
+:root {
+  --mowl-bg-a: #ffffff;
+  --mowl-bg-b: #ffffff;
+  --mowl-ink: #0f172a;
+  --mowl-muted: #475569;
+  --mowl-line: #dbe4f0;
+  --mowl-card: #ffffff;
+  --mowl-brand: #0f766e;
+  --mowl-accent: #0ea5e9;
+}
+
+html,
+body,
+#root {
+  min-height: 100%;
+}
+
+body {
+  color: var(--mowl-ink);
+  font-family: "Manrope", "Avenir Next", "Segoe UI", sans-serif;
+  background: #ffffff;
+}
+
+.dashboard-card {
+  position: relative;
+  overflow: hidden;
+  transition: transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease;
+}
+
+.dashboard-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.12);
+  border-color: #c7d2fe;
+}
+
+.dashboard-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 4px;
+  background: linear-gradient(90deg, #4338ca 0%, #6366f1 50%, #818cf8 100%);
+  opacity: 0.9;
+}
+
+.dashboard-card:hover::before {
+  opacity: 1;
+}

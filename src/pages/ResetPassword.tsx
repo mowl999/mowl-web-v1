@@ -10,6 +10,7 @@ import { apiFetch } from "@/lib/api";
 export default function ResetPassword() {
   const [search] = useSearchParams();
   const token = search.get("token") || "";
+  const email = search.get("email") || "";
   const nav = useNavigate();
 
   const [newPassword, setNewPassword] = useState("");
@@ -18,19 +19,24 @@ export default function ResetPassword() {
 
   useEffect(() => {
     if (!token) toast.error("Reset token missing");
-  }, [token]);
+    if (!email) toast.error("Reset email missing");
+  }, [token, email]);
 
   async function submit(e?: React.FormEvent) {
     e?.preventDefault();
     if (!token) return toast.error("Reset token missing");
+    if (!email) return toast.error("Reset email missing");
     if (!newPassword) return toast.error("Enter new password");
     if (newPassword !== confirm) return toast.error("Passwords do not match");
+
     setLoading(true);
     try {
-      await apiFetch("/api/auth/reset-password", {
+      // ✅ Backend: POST /v1/auth/reset-password
+      await apiFetch("/v1/auth/reset-password", {
         method: "POST",
-        body: JSON.stringify({ token, newPassword }),
+        body: JSON.stringify({ email, token, newPassword }),
       });
+
       toast.success("Password reset. Please login");
       nav("/login");
     } catch (err: any) {
@@ -40,11 +46,13 @@ export default function ResetPassword() {
     }
   }
 
+  const tokenMissing = !token || !email;
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-100 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="mb-6 text-center space-y-2">
-          <div className="text-3xl font-bold tracking-tight text-indigo-700">EazziHotech</div>
+          <div className="text-3xl font-bold tracking-tight text-indigo-700">mowl</div>
           <div className="text-sm text-muted-foreground">Set a new password for your account</div>
         </div>
 
@@ -57,30 +65,48 @@ export default function ResetPassword() {
           </CardHeader>
 
           <CardContent>
-            <form onSubmit={submit} className="space-y-4">
-              <div className="space-y-2">
-                <Label>New password</Label>
-                <Input type="password" value={newPassword} onChange={(e) => setNewPassword(e.target.value)} />
+            {tokenMissing ? (
+              <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+                Reset token is missing. Please use the link from your email.
               </div>
+            ) : (
+              <form onSubmit={submit} className="space-y-4">
+                <div className="space-y-2">
+                  <Label>New password</Label>
+                  <Input
+                    type="password"
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
+                </div>
 
-              <div className="space-y-2">
-                <Label>Confirm password</Label>
-                <Input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)} />
-              </div>
+                <div className="space-y-2">
+                  <Label>Confirm password</Label>
+                  <Input
+                    type="password"
+                    value={confirm}
+                    onChange={(e) => setConfirm(e.target.value)}
+                  />
+                </div>
 
-              <Button className="w-full bg-indigo-200 hover:bg-indigo-700 text-white" disabled={loading} type="submit">
-                {loading ? "Saving..." : "Save new password"}
-              </Button>
+                <Button
+                  className="w-full bg-indigo-200 hover:bg-indigo-700 text-white"
+                  disabled={loading}
+                  type="submit"
+                >
+                  {loading ? "Saving..." : "Save new password"}
+                </Button>
 
-              <div className="text-xs text-muted-foreground text-center">
-                By continuing, you agree to your organization’s access policy.
-              </div>
-            </form>
+                <div className="text-xs text-muted-foreground text-center">
+                  By continuing, you agree with MOwl access policy.
+                </div>
+              </form>
+            )}
           </CardContent>
         </Card>
 
         <div className="mt-6 text-center text-xs text-muted-foreground">
-          © {new Date().getFullYear()} EazziHotech. All rights reserved.
+          © {new Date().getFullYear()} mowl. All rights reserved.
         </div>
       </div>
     </div>

@@ -1,139 +1,85 @@
-import { useState, useRef, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { toast } from "sonner";
+import { apiFetch } from "@/lib/api";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { publicFetch, apiFetch } from "@/lib/api";
-
-type Tenant = { id: string; name: string; slug: string };
 
 export default function ForgotPassword() {
   const nav = useNavigate();
-  const [tenantQuery, setTenantQuery] = useState("");
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
   const [email, setEmail] = useState("");
   const [loading, setLoading] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
-  const menuRef = useRef<HTMLDivElement | null>(null);
+  const [errMsg, setErrMsg] = useState<string | null>(null);
+  const [done, setDone] = useState(false);
 
-  useEffect(() => {
-    function onDocClick(e: MouseEvent) {
-      if (!menuRef.current) return;
-      if (e.target instanceof Node && !menuRef.current.contains(e.target)) setMenuOpen(false);
-    }
-    document.addEventListener("click", onDocClick);
-    return () => document.removeEventListener("click", onDocClick);
-  }, []);
-
-  useEffect(() => {
-    const q = tenantQuery.trim();
-    if (q.length < 2) {
-      setTenants([]);
-      return;
-    }
-    const t = setTimeout(async () => {
-      try {
-        const data = await publicFetch(`/api/public/tenants?query=${encodeURIComponent(q)}`);
-        setTenants(data.tenants || []);
-      } catch (err: any) {
-        toast.error(err?.message || "Failed to search workspaces");
-      }
-    }, 250);
-    return () => clearTimeout(t);
-  }, [tenantQuery]);
-
-  async function submit(e?: React.FormEvent) {
-    e?.preventDefault();
-    if (!email) return toast.error("Email is required");
+  async function onSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    setErrMsg(null);
     setLoading(true);
+
     try {
-      await apiFetch("/api/auth/forgot-password", {
+      // Backend: POST /v1/auth/forgot-password
+      await apiFetch("/v1/auth/forgot-password", {
         method: "POST",
-        body: JSON.stringify({
-          tenantSlug: selectedTenant?.slug,
-          tenantId: selectedTenant?.id,
-          email,
-        }),
+        body: JSON.stringify({ email }),
       });
-      toast.success("If the email exists, a reset link was sent");
-      nav("/login");
+
+      setDone(true);
     } catch (err: any) {
-      toast.error(err?.message || "Request failed");
+      if (err?.status === 404) {
+        setErrMsg("No account was found with that email address.");
+      } else {
+        setErrMsg(err?.message || "Failed to request password reset");
+      }
     } finally {
       setLoading(false);
     }
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-100 flex items-center justify-center px-4">
-      <div className="w-full max-w-md">
-        <div className="mb-6 text-center space-y-2">
-          <div className="text-3xl font-bold tracking-tight text-indigo-700">EazziHotech</div>
-          <div className="text-sm text-muted-foreground">Reset your account password</div>
+    <div className="mx-auto max-w-md p-6">
+      <button
+        className="text-sm text-muted-foreground hover:underline"
+        onClick={() => nav("/login")}
+        type="button"
+      >
+        ← Back to sign in
+      </button>
+
+      <h1 className="mt-4 text-2xl font-semibold">Forgot password</h1>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Enter your email and we’ll send you instructions to reset your password.
+      </p>
+
+      {errMsg && (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">
+          {errMsg}
         </div>
+      )}
 
-        <Card className="rounded-2xl border-indigo-300 bg-white shadow-sm">
-          <CardHeader className="space-y-1">
-            <CardTitle className="text-xl text-center">Reset password</CardTitle>
-            <p className="text-xs text-slate-400 text-muted-foreground text-center">
-              Enter your workspace (optional) and email to receive a reset link.
-            </p>
-          </CardHeader>
-
-          <CardContent>
-            <form onSubmit={submit} className="space-y-4">
-              <div className="space-y-2 relative" ref={menuRef}>
-                <Label>Workspace (optional)</Label>
-                <Input
-                  className="border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-600"
-                  placeholder="Type workspace (min 2 chars)"
-                  value={tenantQuery}
-                  onChange={(e) => { setTenantQuery(e.target.value); setMenuOpen(true); }}
-                  onFocus={() => setMenuOpen(true)}
-                  autoComplete="off"
-                />
-                <div className="absolute left-0 right-0 mt-1 z-50">
-                  <div className={`w-full bg-white border rounded-md shadow-md max-h-56 overflow-auto transition-opacity ${menuOpen ? "opacity-100" : "pointer-events-none opacity-0"}`}>
-                    {tenantQuery.trim().length < 2 ? (
-                      <div className="p-3 text-sm text-muted-foreground">Type at least 2 characters</div>
-                    ) : tenants.length === 0 ? (
-                      <div className="p-3 text-sm text-muted-foreground">No workspaces found</div>
-                    ) : tenants.map((t) => (
-                      <button key={t.id} type="button" className="w-full text-left p-3 hover:bg-slate-50"
-                        onClick={() => { setSelectedTenant(t); setTenantQuery(t.name); setMenuOpen(false); }}>
-                        <div className="flex flex-col">
-                          <span className="font-medium">{t.name}</span>
-                          <span className="text-xs text-muted-foreground">@{t.slug}</span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
-                <Input id="email" placeholder="you@company.com" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
-              </div>
-
-              <Button className="w-full bg-indigo-200 hover:bg-indigo-700 text-white" disabled={loading} type="submit">
-                {loading ? "Sending..." : "Send reset link"}
-              </Button>
-
-              <div className="text-xs text-muted-foreground text-center">
-                By continuing, you agree to your organization’s access policy.
-              </div>
-            </form>
-          </CardContent>
-        </Card>
-
-        <div className="mt-6 text-center text-xs text-muted-foreground">
-          © {new Date().getFullYear()} EazziHotech. All rights reserved.
+      {done ? (
+        <div className="mt-6 rounded-lg border p-4 text-sm">
+          If an account exists for <span className="font-medium">{email}</span>, you’ll receive a reset link shortly.
         </div>
-      </div>
+      ) : (
+        <form onSubmit={onSubmit} className="mt-6 space-y-4">
+          <div>
+            <Label className="text-sm font-medium">Email</Label>
+            <Input
+              className="mt-1"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              autoComplete="email"
+              placeholder="you@example.com"
+              required
+            />
+          </div>
+
+          <Button disabled={loading} className="w-full bg-indigo-600 text-white hover:bg-indigo-700">
+            {loading ? "Sending…" : "Send reset link"}
+          </Button>
+        </form>
+      )}
     </div>
   );
 }

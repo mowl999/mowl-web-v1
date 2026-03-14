@@ -4,12 +4,13 @@ import ReactDOM from "react-dom/client";
 import { RouterProvider } from "react-router-dom";
 import { router } from "@/app/routes";
 import { Toaster } from "@/components/ui/sonner";
-import App from './App';
-
+import { AuthProvider } from "@/app/AuthContext";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
-    <RouterProvider router={router} />
-    <Toaster richColors />
+    <AuthProvider>
+      <RouterProvider router={router} />
+      <Toaster richColors />
+    </AuthProvider>
   </React.StrictMode>
 );

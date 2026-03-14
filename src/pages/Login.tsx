@@ -1,146 +1,70 @@
-import { useEffect, useMemo, useState, useRef } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
 import { toast } from "sonner";
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { useAuth } from "@/app/AuthContext";
 
-import { apiFetch, publicFetch, setAuthSession } from "@/lib/api";
-
-type Tenant = { id: string; name: string; slug: string };
+import { apiFetch } from "@/lib/api";
 
 export default function Login() {
   const nav = useNavigate();
+  const loc = useLocation() as any;
+  const { loginWithToken } = useAuth();
 
-  // Workspace selection
-  const [tenantQuery, setTenantQuery] = useState("");
-  const [tenants, setTenants] = useState<Tenant[]>([]);
-  const [loadingTenants, setLoadingTenants] = useState(false);
-  const [selectedTenant, setSelectedTenant] = useState<Tenant | null>(null);
-
-  // Combobox-style workspace selector
-  const menuRef = useRef<HTMLDivElement | null>(null);
-  const [menuOpen, setMenuOpen] = useState(false);
+  // After login, go to where they tried to access, else product selector.
+  const from = loc.state?.from || "/app/products";
 
   // Login creds
-  const [email, setEmail] = useState("admin@demo.com");
-  const [password, setPassword] = useState("Password123!");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(() => localStorage.getItem("rememberMe") !== "0");
+  const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    function onDocClick(e: MouseEvent) {
-      if (!menuRef.current) return;
-      if (e.target instanceof Node && !menuRef.current.contains(e.target)) {
-        setMenuOpen(false);
-      }
-    }
-    document.addEventListener("click", onDocClick);
-    return () => document.removeEventListener("click", onDocClick);
-  }, []);
-
-  // Load previously selected tenant (if any)
-  useEffect(() => {
-    const tenantId = localStorage.getItem("tenantId");
-    const tenantSlug = localStorage.getItem("tenantSlug");
-    const tenantName = localStorage.getItem("tenantName");
-    if (tenantId && tenantSlug && tenantName) {
-      setSelectedTenant({ id: tenantId, slug: tenantSlug, name: tenantName });
-      setTenantQuery(tenantName);
-    }
-  }, []);
-
-  // Search tenants (debounced)
-  useEffect(() => {
-    const q = tenantQuery.trim();
-    if (q.length < 2) {
-      setTenants([]);
-      return;
-    }
-
-    const t = setTimeout(async () => {
-      try {
-        setLoadingTenants(true);
-        const data = await publicFetch(
-          `/api/public/tenants?query=${encodeURIComponent(q)}`
-        );
-        setTenants(data.tenants || []);
-      } catch (err: any) {
-        toast.error(err?.message || "Failed to search workspaces");
-      } finally {
-        setLoadingTenants(false);
-      }
-    }, 300);
-
-    return () => clearTimeout(t);
-  }, [tenantQuery]);
-
-  const tenantLabel = useMemo(() => {
-    if (!selectedTenant) return "Select workspace";
-    return `${selectedTenant.name} (@${selectedTenant.slug})`;
-  }, [selectedTenant]);
-
-  function pickTenant(t: Tenant) {
-    setSelectedTenant(t);
-    setTenantQuery(t.name);
-
-    // Persist selection so apiFetch can automatically attach x-tenant-id
-    localStorage.setItem("tenantId", t.id);
-    localStorage.setItem("tenantSlug", t.slug);
-    localStorage.setItem("tenantName", t.name);
-
-    toast.success(`Workspace selected: ${t.name}`);
-    setMenuOpen(false);
-    setTenants([]);
-  }
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    if (!selectedTenant?.id) {
-      toast.error("Please select your workspace first.");
-      return;
-    }
-
     setLoading(true);
 
     try {
-      // apiFetch automatically attaches:
-      // - x-tenant-id from localStorage (set in pickTenant)
-      // - Authorization if token exists (not required for login)
-      const data = await apiFetch("/api/auth/login", {
+      const data = await apiFetch<{ token: string; user: any }>("/v1/auth/login", {
         method: "POST",
         body: JSON.stringify({ email, password }),
       });
 
-      console.log("Login response:", data);
+      if (!data?.token) throw new Error("Login response missing token");
 
-      // New response shape (with backward-compat fallback)
-      const accessToken = data?.accessToken ?? data?.tokens?.accessToken;
-      const refreshToken = data?.refreshToken ?? data?.tokens?.refreshToken;
-      const tenantId = data?.tenantId ?? data?.user?.tenantId ?? selectedTenant.id;
+      await loginWithToken(data.token, rememberMe);
 
-      if (!accessToken) throw new Error("Login response missing accessToken");
-      if (!tenantId) throw new Error("Login response missing tenantId");
-
-      setAuthSession({ tenantId, accessToken, refreshToken });
-
-      // Store user info for topbar (support both shapes)
-      const userName = data?.user?.fullName || data?.user?.name || data?.user?.email || email;
-      const userRole = (data?.role || data?.user?.role || "staff").toString().toLowerCase();
+      // ✅ store user display fields for topbar/sidebar (optional but useful)
+      const userName = data?.user?.fullName || data?.user?.email || email;
+      const userRole = (data?.user?.role || "user").toString().toLowerCase();
 
       localStorage.setItem("userName", userName);
       localStorage.setItem("userRole", userRole);
       localStorage.setItem("userId", data?.user?.id || "");
 
       toast.success("Logged in");
-      nav("/app/dashboard");
-    } catch (err) {
-      const msg =
-        err instanceof Error ? err.message : (err as any)?.message || "Login failed";
-      toast.error(msg);
+
+      if (data?.user?.role === "ADMIN") {
+        nav("/app/admin", { replace: true });
+        return;
+      }
+
+      // If user was deep-linking to a protected page, honor it.
+      // Otherwise open the product selector.
+      nav(from, { replace: true });
+
+    } catch (err: any) {
+      const msg = err?.message || "Login failed";
+      if (String(msg).toLowerCase().includes("verify your email")) {
+        nav(`/signup?mode=email-sent&email=${encodeURIComponent(email.trim())}`);
+      }
+      toast.error(err?.message || "Login failed");
     } finally {
       setLoading(false);
     }
@@ -150,11 +74,9 @@ export default function Login() {
     <div className="min-h-screen bg-gradient-to-b from-slate-50 via-white to-slate-100 flex items-center justify-center px-4">
       <div className="w-full max-w-md">
         <div className="mb-6 text-center space-y-2">
-          <div className="text-3xl font-bold tracking-tight text-indigo-700">
-            EazziHotech
-          </div>
+          <div className="text-3xl font-bold tracking-tight text-indigo-700">mowl</div>
           <div className="text-sm text-muted-foreground">
-            Sign in to your hotel / shortlet workspace
+            Sign in to access your products
           </div>
         </div>
 
@@ -162,85 +84,19 @@ export default function Login() {
           <CardHeader className="space-y-1">
             <CardTitle className="text-xl text-center">Sign in</CardTitle>
             <p className="text-xs text-slate-400 text-muted-foreground text-center">
-              Select your workspace, then sign in.
+              Enter your account details to continue.
             </p>
           </CardHeader>
 
           <CardContent>
             <form onSubmit={onSubmit} className="space-y-4">
-              {/* Workspace selector */}
-              <div className="space-y-2 relative" ref={menuRef}>
-                <Label>Workspace</Label>
-
-                <Input
-                  className={`border border-indigo-200 focus:border-indigo-500 focus:ring-indigo-600 ${
-                    selectedTenant && tenantQuery === selectedTenant.name
-                      ? "text-indigo-500"
-                      : "text-slate-400"
-                  }`}
-                  placeholder="Type your workspace name (min 2 chars)"
-                  value={tenantQuery}
-                  onChange={(e) => {
-                    setTenantQuery(e.target.value);
-                    setMenuOpen(true);
-                  }}
-                  onFocus={() => setMenuOpen(true)}
-                  autoComplete="off"
-                />
-
-                <div className="absolute left-0 right-0 mt-1 z-50">
-                  <div
-                    className={`w-full bg-white border rounded-md shadow-md max-h-56 overflow-auto transition-opacity ${
-                      menuOpen ? "opacity-100" : "pointer-events-none opacity-0"
-                    }`}
-                  >
-                    {loadingTenants ? (
-                      <div className="p-3 text-sm text-muted-foreground">
-                        Searching...
-                      </div>
-                    ) : tenantQuery.trim().length < 2 ? (
-                      <div className="p-3 text-sm text-muted-foreground">
-                        Type at least 2 characters
-                      </div>
-                    ) : tenants.length === 0 ? (
-                      <div className="p-3 text-sm text-muted-foreground">
-                        No workspaces found
-                      </div>
-                    ) : (
-                      tenants.map((t) => (
-                        <button
-                          key={t.id}
-                          type="button"
-                          className="w-full text-left p-3 hover:bg-slate-50"
-                          onClick={() => pickTenant(t)}
-                        >
-                          <div className="flex flex-col">
-                            <span className="font-medium">{t.name}</span>
-                            <span className="text-xs text-muted-foreground">
-                              @{t.slug}
-                            </span>
-                          </div>
-                        </button>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* Selected tenant label (optional display) */}
-                {selectedTenant && (
-                  <div className="text-xs text-muted-foreground mt-1">
-                    Selected: {tenantLabel}
-                  </div>
-                )}
-              </div>
-
               {/* Email */}
               <div className="space-y-2">
                 <Label htmlFor="email">Email</Label>
                 <Input
                   className="border border-indigo-300 focus:border-indigo-500 focus:ring-indigo-600"
                   id="email"
-                  placeholder="admin@hotel.com"
+                  placeholder="you@email.com"
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
                   autoComplete="email"
@@ -263,13 +119,29 @@ export default function Login() {
                 <Input
                   className="border border-indigo-300 focus:border-indigo-500 focus:ring-indigo-600"
                   id="password"
-                  type="password"
+                  type={showPassword ? "text" : "password"}
                   placeholder="••••••••"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   autoComplete="current-password"
                 />
+                <button
+                  type="button"
+                  className="text-xs text-muted-foreground hover:underline"
+                  onClick={() => setShowPassword((v) => !v)}
+                >
+                  {showPassword ? "Hide password" : "Show password"}
+                </button>
               </div>
+
+              <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                <input
+                  type="checkbox"
+                  checked={rememberMe}
+                  onChange={(e) => setRememberMe(e.target.checked)}
+                />
+                Remember me
+              </label>
 
               <Button
                 className="w-full bg-indigo-700 hover:bg-indigo-800 text-white"
@@ -280,14 +152,21 @@ export default function Login() {
               </Button>
 
               <div className="text-xs text-muted-foreground text-center">
-                By continuing, you agree to your organization’s access policy.
+                By continuing, you agree with MOwl access policy.
+              </div>
+
+              <div className="text-xs text-muted-foreground text-center">
+                New to mowl?{" "}
+                <button type="button" className="underline" onClick={() => nav("/signup")}>
+                  Create account
+                </button>
               </div>
             </form>
           </CardContent>
         </Card>
 
         <div className="mt-6 text-center text-xs text-muted-foreground">
-          © {new Date().getFullYear()} EazziHotech. All rights reserved.
+          © {new Date().getFullYear()} mowl. All rights reserved.
         </div>
       </div>
     </div>
