@@ -195,7 +195,7 @@ export default function MyContributionsDashboard() {
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-slate-900">MyContributions Dashboard</h1>
             <p className="text-sm text-slate-500">
-            Plan your goal payout month and track monthly contribution obligations.
+            Plan your payout month and track monthly contribution obligations for each financial plan.
             </p>
           </div>
           <Button variant="outline" onClick={loadDashboard} disabled={loading}>
@@ -211,17 +211,17 @@ export default function MyContributionsDashboard() {
       ) : plans.length === 0 ? (
         <Card className="rounded-3xl border-sky-100 bg-sky-50/40 shadow-sm dashboard-card">
           <CardHeader>
-            <CardTitle className="text-base">No goal plan yet</CardTitle>
+            <CardTitle className="text-base">No financial plan yet</CardTitle>
           </CardHeader>
           <CardContent className="text-sm text-muted-foreground">
-            Create your first goal from the Goals tab to see payout projection and timeline.
+            Create your first financial plan from the Plans tab to see payout projection and timeline.
           </CardContent>
         </Card>
       ) : (
         <>
           <Card className="rounded-3xl border-sky-100 bg-sky-50/40 shadow-sm dashboard-card">
             <CardHeader>
-              <CardTitle className="text-base">Select Goal Plan</CardTitle>
+              <CardTitle className="text-base">Select Financial Plan</CardTitle>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
               {plans.map((p) => (
@@ -342,7 +342,7 @@ export default function MyContributionsDashboard() {
                 <CardContent className="space-y-3">
                   <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                     <div className="space-y-1">
-                      <div className="text-xs text-slate-500">Monthly contribution per new goal</div>
+                      <div className="text-xs text-slate-500">Monthly contribution per new plan</div>
                       <input
                         className="h-10 w-full rounded-lg border border-sky-200 bg-white px-3 text-sm"
                         value={scenarioMonthly}
@@ -351,7 +351,7 @@ export default function MyContributionsDashboard() {
                       />
                     </div>
                     <div className="space-y-1">
-                      <div className="text-xs text-slate-500">Number of new goals</div>
+                      <div className="text-xs text-slate-500">Number of new plans</div>
                       <input
                         className="h-10 w-full rounded-lg border border-sky-200 bg-white px-3 text-sm"
                         value={scenarioGoals}

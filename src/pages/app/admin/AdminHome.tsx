@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
+import { useNavigate } from "react-router-dom";
+import { AlertTriangle, ArrowUpRight, Clock3, PauseCircle, Users } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { apiFetch } from "@/lib/api";
@@ -48,12 +50,11 @@ type AdminDashboard = {
   };
 };
 
-type TrendPoint = { date: string; value: number };
 type ProductMetrics = {
   users: number;
   trends: {
-    users: { d7: TrendPoint[]; d30: TrendPoint[] };
-    activity: { d7: TrendPoint[]; d30: TrendPoint[] };
+    users: { d7: Array<{ date: string; value: number }>; d30: Array<{ date: string; value: number }> };
+    activity: { d7: Array<{ date: string; value: number }>; d30: Array<{ date: string; value: number }> };
   };
   plans?: number;
   activePlans?: number;
@@ -62,39 +63,10 @@ type ProductMetrics = {
   pauseRequestsSubmitted?: number;
   accountsWithActivity?: number;
   transactions?: number;
+  repaidTotal?: number;
 };
 
 type CardTone = "thrift" | "investment" | "loans" | "fundTransfers";
-
-const CARD_TONES: Record<
-  CardTone,
-  { card: string; title: string; content: string; metrics: string }
-> = {
-  thrift: {
-    card: "border-sky-200 bg-sky-50/70",
-    title: "text-sky-700",
-    content: "text-slate-700",
-    metrics: "[&_.text-foreground]:text-slate-900 [&_.text-muted-foreground]:text-slate-600",
-  },
-  investment: {
-    card: "border-emerald-200 bg-emerald-50/70",
-    title: "text-emerald-700",
-    content: "text-slate-700",
-    metrics: "[&_.text-foreground]:text-slate-900 [&_.text-muted-foreground]:text-slate-600",
-  },
-  loans: {
-    card: "border-amber-200 bg-amber-50/70",
-    title: "text-amber-700",
-    content: "text-slate-700",
-    metrics: "[&_.text-foreground]:text-slate-900 [&_.text-muted-foreground]:text-slate-600",
-  },
-  fundTransfers: {
-    card: "border-indigo-200 bg-indigo-50/70",
-    title: "text-indigo-700",
-    content: "text-slate-700",
-    metrics: "[&_.text-foreground]:text-slate-900 [&_.text-muted-foreground]:text-slate-600",
-  },
-};
 
 type ContributionSplitReport = {
   range: "7d" | "30d" | "90d" | "all";
@@ -111,7 +83,245 @@ type ContributionSplitReport = {
   };
 };
 
+type ProductCardMetric = {
+  label: string;
+  value: string | number | null | undefined;
+};
+
+type SummaryCardProps = {
+  title: string;
+  value: string | number;
+  hint: string;
+  icon: ComponentType<{ className?: string }>;
+  tone: "slate" | "indigo" | "amber" | "rose";
+};
+
+const CARD_TONES: Record<
+  CardTone,
+  {
+    shell: string;
+    badge: string;
+    title: string;
+    metricTile: string;
+  }
+> = {
+  thrift: {
+    shell: "border-indigo-100 bg-white",
+    badge: "bg-indigo-50 text-indigo-700",
+    title: "text-slate-900",
+    metricTile: "border-indigo-100 bg-indigo-50/40",
+  },
+  investment: {
+    shell: "border-indigo-100 bg-white",
+    badge: "bg-indigo-50 text-indigo-700",
+    title: "text-slate-900",
+    metricTile: "border-indigo-100 bg-indigo-50/40",
+  },
+  loans: {
+    shell: "border-indigo-100 bg-white",
+    badge: "bg-indigo-50 text-indigo-700",
+    title: "text-slate-900",
+    metricTile: "border-indigo-100 bg-indigo-50/40",
+  },
+  fundTransfers: {
+    shell: "border-indigo-100 bg-white",
+    badge: "bg-indigo-50 text-indigo-700",
+    title: "text-slate-900",
+    metricTile: "border-indigo-100 bg-indigo-50/40",
+  },
+};
+
+const SUMMARY_TONES: Record<SummaryCardProps["tone"], string> = {
+  slate: "border-indigo-100 bg-white",
+  indigo: "border-indigo-100 bg-white",
+  amber: "border-indigo-100 bg-white",
+  rose: "border-indigo-100 bg-white",
+};
+
+function SummaryCard({ title, value, hint, icon: Icon, tone }: SummaryCardProps) {
+  return (
+    <Card className={cn("rounded-2xl border shadow-sm dashboard-card", SUMMARY_TONES[tone])}>
+      <CardContent className="flex items-start justify-between gap-4 p-5">
+        <div className="space-y-1.5">
+          <div className="text-sm font-medium text-slate-500">{title}</div>
+          <div className="text-3xl font-semibold tracking-tight text-slate-950">{value}</div>
+          <div className="text-xs text-slate-500">{hint}</div>
+        </div>
+        <div className="rounded-xl border border-white/70 bg-white/80 p-2.5 shadow-sm">
+          <Icon className="h-5 w-5 text-slate-700" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function PanelMetric({ label, value, hint }: { label: string; value: string | number; hint?: string }) {
+  return (
+    <div className="flex h-full min-h-[132px] min-w-0 flex-col overflow-hidden rounded-xl border bg-white p-4 shadow-sm">
+      <div className="text-xs uppercase tracking-[0.16em] text-slate-400">{label}</div>
+      <div className="mt-3 min-w-0 break-words text-xl font-semibold leading-tight tracking-tight text-slate-950 sm:text-2xl">
+        {value}
+      </div>
+      <div className="mt-auto pt-3 text-xs text-slate-500">{hint || ""}</div>
+    </div>
+  );
+}
+
+function ProductCard({
+  title,
+  product,
+  metrics,
+  tone,
+}: {
+  title: string;
+  product: ProductMetrics;
+  metrics: ProductCardMetric[];
+  tone: CardTone;
+}) {
+  const toneStyle = CARD_TONES[tone];
+
+  return (
+    <Card className={cn("rounded-2xl border shadow-sm dashboard-card", toneStyle.shell)}>
+      <CardContent className="flex h-full flex-col gap-4 p-5">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <div className={cn("text-sm font-semibold", toneStyle.title)}>{title}</div>
+            <div className="mt-1 text-xs text-slate-500">Product performance snapshot</div>
+          </div>
+          <div className={cn("rounded-full px-3 py-1 text-xs font-semibold", toneStyle.badge)}>
+            {product.users} users
+          </div>
+        </div>
+
+        <div className="grid gap-2 sm:grid-cols-2">
+          {metrics.map((metric) => (
+            <div key={`${title}-${metric.label}`} className={cn("rounded-xl border p-3 shadow-sm", toneStyle.metricTile)}>
+              <div className="text-[11px] uppercase tracking-[0.16em] text-slate-400">{metric.label}</div>
+              <div className="mt-1 text-lg font-semibold tracking-tight text-slate-950">{metric.value ?? "—"}</div>
+            </div>
+          ))}
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+function TopRiskCard({ users }: { users: AdminDashboard["risk"]["topMissedUsers"] }) {
+  return (
+    <Card className="rounded-2xl border shadow-sm dashboard-card">
+      <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
+        <div>
+          <CardTitle className="text-base text-slate-950">Top risk: missed contributions</CardTitle>
+          <p className="mt-1 text-sm text-slate-500">Users currently carrying the highest repayment pressure.</p>
+        </div>
+        <div className="rounded-xl border bg-rose-50 p-2.5 text-rose-600 shadow-sm">
+          <AlertTriangle className="h-5 w-5" />
+        </div>
+      </CardHeader>
+      <CardContent>
+        {users.length === 0 ? (
+          <div className="rounded-xl border border-dashed bg-slate-50 px-4 py-6 text-sm text-slate-500">
+            No risk signals right now.
+          </div>
+        ) : (
+          <div className="space-y-2">
+            {users.map((user) => (
+              <div key={user.userId} className="flex items-center justify-between gap-3 rounded-xl border bg-white p-3 shadow-sm">
+                <div className="min-w-0">
+                  <div className="truncate font-medium text-slate-950">{user.fullName || user.email || user.userId}</div>
+                  <div className="truncate text-xs text-slate-500">
+                    {user.email || "—"}
+                    {user.state ? <span>{` • ${user.state}`}</span> : null}
+                  </div>
+                </div>
+                <div className="rounded-full bg-rose-50 px-3 py-1 text-xs font-semibold text-rose-700">
+                  {user.missedCount} missed
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ContributionSplitCard({ split }: { split: ContributionSplitReport | null }) {
+  return (
+    <Card className="rounded-2xl border shadow-sm dashboard-card">
+      <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
+        <div>
+          <CardTitle className="text-base text-slate-950">Contribution totals</CardTitle>
+          <p className="mt-1 text-sm text-slate-500">Breakdown of base collections, interest spread, and fee income.</p>
+        </div>
+        {split ? (
+          <div className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
+            {split.range.toUpperCase()}
+          </div>
+        ) : null}
+      </CardHeader>
+      <CardContent>
+        {!split ? (
+          <div className="rounded-xl border border-dashed bg-slate-50 px-4 py-6 text-sm text-slate-500">
+            No split report yet.
+          </div>
+        ) : (
+          <div className="grid gap-3 lg:grid-cols-3">
+            <PanelMetric
+              label="Base collected"
+              value={formatMoney(split.totals.baseContributionTotal)}
+              hint={`Settled contributions: ${split.totals.contributionsCount}`}
+            />
+            <PanelMetric
+              label="Interest net"
+              value={formatMoney(split.totals.positionInterestNet)}
+              hint={`Charges ${formatMoney(split.totals.positionInterestCharges)} • Compensation ${formatMoney(split.totals.positionInterestCompensation)}`}
+            />
+            <PanelMetric
+              label="Fee income"
+              value={formatMoney(split.totals.totalCharges)}
+              hint={`Swap fees ${formatMoney(split.totals.approvedSwapFees)}`}
+            />
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function PauseAnalyticsCard({ pauses }: { pauses: AdminDashboard["pauses"] }) {
+  return (
+    <Card className="rounded-2xl border shadow-sm dashboard-card">
+      <CardHeader className="flex flex-row items-start justify-between gap-4 pb-3">
+        <div>
+          <CardTitle className="text-base text-slate-950">Pause analytics</CardTitle>
+          <p className="mt-1 text-sm text-slate-500">Review pause demand and the fees approved from post-payout pauses.</p>
+        </div>
+        <div className="rounded-xl border bg-indigo-50 p-2.5 text-indigo-600 shadow-sm">
+          <PauseCircle className="h-5 w-5" />
+        </div>
+      </CardHeader>
+      <CardContent>
+        <div className="grid gap-3 lg:grid-cols-3">
+          <PanelMetric
+            label="Submitted"
+            value={pauses.submittedCount}
+            hint={`Fee total ${formatMoney(pauses.submittedFeesTotal)}`}
+          />
+          <PanelMetric
+            label="Approved"
+            value={pauses.approvedCount}
+            hint={`Fee total ${formatMoney(pauses.approvedFeesTotal)}`}
+          />
+          <PanelMetric label="Rejected" value={pauses.rejectedCount} hint="No fee posted" />
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function AdminHome() {
+  const navigate = useNavigate();
   const [data, setData] = useState<AdminDashboard | null>(null);
   const [split, setSplit] = useState<ContributionSplitReport | null>(null);
   const [range, setRange] = useState<"7d" | "30d" | "90d" | "all">("30d");
@@ -137,148 +347,103 @@ export default function AdminHome() {
     }
   }, [range]);
 
-  const trendWindow = "7";
-  const trendKey = "d7" as const;
-
-  function MiniLineChart({
-    title,
-    points,
-    stroke = "#4f46e5",
-  }: {
-    title: string;
-    points: TrendPoint[];
-    stroke?: string;
-  }) {
-    const [hoverIdx, setHoverIdx] = useState<number | null>(null);
-    const chartPoints = points?.length ? points : [{ date: "—", value: 0 }];
-    const width = 100;
-    const height = 64;
-    const padX = 8;
-    const padY = 8;
-    const min = Math.min(...chartPoints.map((p) => p.value || 0));
-    const max = Math.max(...chartPoints.map((p) => p.value || 0));
-    const span = Math.max(1, max - min);
-    const step = (width - padX * 2) / Math.max(1, chartPoints.length - 1);
-
-    const coords = chartPoints.map((p, i) => {
-      const x = padX + i * step;
-      const y = height - padY - ((p.value - min) / span) * (height - padY * 2);
-      return { x, y };
-    });
-
-    const path = coords.map((c, i) => `${i === 0 ? "M" : "L"} ${c.x} ${c.y}`).join(" ");
-    const activeIdx = hoverIdx ?? Math.max(0, chartPoints.length - 1);
-    const activePoint = chartPoints[activeIdx];
-    const first = chartPoints[0]?.value ?? 0;
-    const last = chartPoints[chartPoints.length - 1]?.value ?? 0;
-    const delta = last - first;
-    const deltaLabel = delta > 0 ? `+${delta}` : `${delta}`;
-    const deltaTone = delta > 0 ? "text-emerald-600" : delta < 0 ? "text-rose-600" : "text-slate-500";
-
-    return (
-      <div className="w-full overflow-hidden rounded-lg border bg-white px-2 py-2">
-        <div className="mb-1 flex items-center justify-between text-[11px]">
-          <span className="text-muted-foreground">{title}</span>
-          <span className={deltaTone}>{deltaLabel}</span>
-        </div>
-        <div className="relative w-full overflow-hidden">
-          <svg viewBox={`0 0 ${width} ${height}`} className="block h-16 w-full">
-            <path d={path} fill="none" stroke={stroke} strokeWidth="2" strokeLinejoin="round" strokeLinecap="round" />
-            {coords.map((c, i) => (
-              <circle
-                key={`${title}-${chartPoints[i].date}`}
-                cx={c.x}
-                cy={c.y}
-                r={i === activeIdx ? 3.5 : 2.5}
-                fill={i === activeIdx ? stroke : "#a5b4fc"}
-                onMouseEnter={() => setHoverIdx(i)}
-              />
-            ))}
-          </svg>
-          <div className="mt-1 text-[11px] text-slate-500">
-            {activePoint?.date}: <span className="font-medium text-slate-700">{activePoint?.value ?? 0}</span>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  function ProductTrendSection({ product }: { product: ProductMetrics }) {
-    return (
-      <div className="grid gap-2">
-        <MiniLineChart title={`Activity volume (${trendWindow}d)`} points={product.trends.activity[trendKey]} stroke="#0f766e" />
-      </div>
-    );
-  }
-
-  function MetricRow({ label, value }: { label: string; value: string | number | null | undefined }) {
-    return (
-      <div className="flex items-center justify-between gap-2 text-muted-foreground">
-        <span className="truncate">{label}</span>
-        <span className="font-medium text-foreground">{value ?? "—"}</span>
-      </div>
-    );
-  }
-
-  function ProductCard({
-    title,
-    product,
-    metrics,
-    tone,
-  }: {
-    title: string;
-    product: ProductMetrics;
-    metrics: Array<{ label: string; value: string | number | null | undefined }>;
-    tone: CardTone;
-  }) {
-    const toneStyle = CARD_TONES[tone];
-    const paddedMetrics = [...metrics];
-    while (paddedMetrics.length < 4) paddedMetrics.push({ label: "—", value: "—" });
-
-    return (
-      <Card
-        className={cn(
-          "h-full overflow-hidden rounded-2xl flex flex-col dashboard-card",
-          toneStyle.card
-        )}
-      >
-        <CardHeader className="pb-2 space-y-1">
-          <CardTitle className={cn("text-sm text-muted-foreground", toneStyle.title)}>
-            {title}
-          </CardTitle>
-        </CardHeader>
-        <CardContent className={cn("flex flex-1 flex-col gap-3 text-sm overflow-hidden", toneStyle.content)}>
-          <div className="text-2xl font-semibold">{product.users} users</div>
-          <div className={cn("min-h-[98px] space-y-1.5", toneStyle.metrics)}>
-            {paddedMetrics.map((m, idx) => (
-              <MetricRow key={`${title}-${m.label}-${idx}`} label={m.label} value={m.value} />
-            ))}
-          </div>
-          <div className="mt-auto w-full overflow-hidden">
-            <ProductTrendSection product={product} />
-          </div>
-        </CardContent>
-      </Card>
-    );
-  }
-
   useEffect(() => {
     load();
   }, [load]);
 
+  const summaryCards = useMemo(() => {
+    if (!data) return [];
+    return [
+      {
+        title: "Total users",
+        value: data.totals.users,
+        hint: "Across all products and admin accounts",
+        icon: Users,
+        tone: "slate" as const,
+      },
+      {
+        title: "Total plans",
+        value: data.totals.plans,
+        hint: `${data.totals.activePlans} currently active`,
+        icon: ArrowUpRight,
+        tone: "indigo" as const,
+      },
+      {
+        title: "Pending payouts",
+        value: data.totals.pendingPayouts,
+        hint: "Plans awaiting payout processing",
+        icon: Clock3,
+        tone: "amber" as const,
+      },
+      {
+        title: "Missed contributions",
+        value: data.totals.missedContributions,
+        hint: "Current missed payment obligations",
+        icon: AlertTriangle,
+        tone: "rose" as const,
+      },
+    ];
+  }, [data]);
+
+  const quickActions = [
+    {
+      label: "Open users",
+      hint: "Manage roles and product access",
+      onClick: () => navigate("/app/admin/users"),
+    },
+    {
+      label: "Loan dashboard",
+      hint: "Monitor repayment pressure and reminders",
+      onClick: () => navigate("/app/admin/loans/dashboard"),
+    },
+    {
+      label: "Loan equity",
+      hint: "Confirm manual equity funding",
+      onClick: () => navigate("/app/admin/loans/equity"),
+    },
+    {
+      label: "Loan products",
+      hint: "Maintain product and equity rules",
+      onClick: () => navigate("/app/admin/loans/products"),
+    },
+    {
+      label: "Loan repayments",
+      hint: "Review manual repayment submissions",
+      onClick: () => navigate("/app/admin/loans/repayments"),
+    },
+    {
+      label: "Review payments",
+      hint: "Approve manual transfers",
+      onClick: () => navigate("/app/admin/payments"),
+    },
+    {
+      label: "Review swaps",
+      hint: "Approve position change requests",
+      onClick: () => navigate("/app/admin/swaps"),
+    },
+    {
+      label: "Review pauses",
+      hint: "Handle pause approvals",
+      onClick: () => navigate("/app/admin/pauses"),
+    },
+  ];
+
   return (
     <div className="space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Admin Console</h1>
-          <p className="text-sm text-muted-foreground">
-            System-wide overview and risk signals.
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
+        <div className="space-y-1.5">
+          <div className="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
+            Admin Console
+          </div>
+          <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Dashboard</h1>
+          <p className="text-sm text-slate-500">
+            Monitor product performance, operational queues, and revenue signals in one place.
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
-          <Select value={range} onValueChange={(v) => setRange(v as "7d" | "30d" | "90d" | "all")}>
-            <SelectTrigger className="w-[140px]">
+        <div className="flex flex-col gap-2 rounded-2xl bg-white p-2 shadow-sm sm:flex-row sm:items-center">
+          <Select value={range} onValueChange={(v) => setRange(v as "7d" | "30d" | "90d" | "all") }>
+            <SelectTrigger className="w-[150px] bg-white">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
@@ -288,31 +453,56 @@ export default function AdminHome() {
               <SelectItem value="all">All time</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="outline" onClick={load} disabled={loading}>
+          <Button variant="outline" className="bg-white" onClick={load} disabled={loading}>
             Refresh
           </Button>
         </div>
       </div>
 
-      {err && (
-        <Card className="rounded-2xl border-destructive/30 dashboard-card">
+      {err ? (
+        <Card className="rounded-2xl border-destructive/30 shadow-sm dashboard-card">
           <CardHeader>
-            <CardTitle className="text-base">Couldn’t load admin dashboard</CardTitle>
+            <CardTitle className="text-base text-slate-950">Couldn’t load admin dashboard</CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            <div className="text-sm text-muted-foreground">{err}</div>
+            <div className="text-sm text-slate-500">{err}</div>
             <Button onClick={load}>Try again</Button>
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
-      {loading && (
-        <div className="text-sm text-muted-foreground">Loading…</div>
-      )}
+      {loading ? <div className="text-sm text-slate-500">Loading dashboard…</div> : null}
 
-      {!loading && data && (
+      {!loading && data ? (
         <>
-          <div className="grid items-stretch gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+            {summaryCards.map((card) => (
+              <SummaryCard key={card.title} {...card} />
+            ))}
+          </div>
+
+          <Card className="rounded-2xl border shadow-sm dashboard-card">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base text-slate-950">Quick actions</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
+                {quickActions.map((action) => (
+                  <button
+                    key={action.label}
+                    type="button"
+                    onClick={action.onClick}
+                    className="rounded-xl border border-indigo-100 bg-white px-4 py-4 text-left shadow-sm transition hover:border-indigo-200 hover:bg-indigo-50/50"
+                  >
+                    <div className="text-sm font-semibold text-slate-900">{action.label}</div>
+                    <div className="mt-1 text-xs text-slate-500">{action.hint}</div>
+                  </button>
+                ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          <div className="grid gap-4 xl:grid-cols-2 2xl:grid-cols-4">
             <ProductCard
               title="MyContributions"
               product={data.products.thrift}
@@ -320,7 +510,7 @@ export default function AdminHome() {
               metrics={[
                 { label: "Plans", value: data.products.thrift.plans },
                 { label: "Active plans", value: data.products.thrift.activePlans },
-                { label: "Missed contributions", value: data.products.thrift.missedContributions },
+                { label: "Missed", value: data.products.thrift.missedContributions },
                 { label: "Pending payouts", value: data.products.thrift.pendingPayouts },
               ]}
             />
@@ -331,7 +521,8 @@ export default function AdminHome() {
               metrics={[
                 { label: "Plans", value: data.products.investment.plans },
                 { label: "Active plans", value: data.products.investment.activePlans },
-                { label: "Accounts with activity", value: data.products.investment.accountsWithActivity },
+                { label: "Accounts active", value: data.products.investment.accountsWithActivity },
+                { label: "Transactions", value: data.products.investment.transactions },
               ]}
             />
             <ProductCard
@@ -339,8 +530,10 @@ export default function AdminHome() {
               product={data.products.loans}
               tone="loans"
               metrics={[
-                { label: "Accounts with activity", value: data.products.loans.accountsWithActivity },
-                { label: "Transactions", value: data.products.loans.transactions },
+                { label: "Live facilities", value: data.products.loans.activePlans ?? 0 },
+                { label: "Overdue installments", value: data.products.loans.missedContributions ?? 0 },
+                { label: "Pending repayment reviews", value: data.products.loans.pendingPayouts ?? 0 },
+                { label: "Repaid total", value: formatMoney(data.products.loans.repaidTotal ?? 0) },
               ]}
             />
             <ProductCard
@@ -348,125 +541,49 @@ export default function AdminHome() {
               product={data.products.fundTransfers}
               tone="fundTransfers"
               metrics={[
-                { label: "Accounts with activity", value: data.products.fundTransfers.accountsWithActivity },
+                { label: "Accounts active", value: data.products.fundTransfers.accountsWithActivity },
                 { label: "Transactions", value: data.products.fundTransfers.transactions },
+                { label: "Users", value: data.products.fundTransfers.users },
+                { label: "Plans", value: data.products.fundTransfers.plans ?? 0 },
               ]}
             />
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            <Card className="rounded-2xl dashboard-card">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">Total users (all products)</CardTitle>
-              </CardHeader>
-              <CardContent className="text-2xl font-semibold">{data.totals.users}</CardContent>
-            </Card>
-            <Card className="rounded-2xl dashboard-card">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">Pending payouts</CardTitle>
-              </CardHeader>
-              <CardContent className="text-2xl font-semibold">{data.totals.pendingPayouts}</CardContent>
-            </Card>
-            <Card className="rounded-2xl dashboard-card">
-              <CardHeader className="pb-2">
-                <CardTitle className="text-sm text-muted-foreground">Submitted pause requests</CardTitle>
-              </CardHeader>
-              <CardContent className="text-2xl font-semibold">{data.products.thrift.pauseRequestsSubmitted}</CardContent>
-            </Card>
+          <div className="grid gap-4 xl:grid-cols-[1.1fr_0.9fr]">
+            <div className="space-y-4">
+              <TopRiskCard users={data.risk.topMissedUsers} />
+              <PauseAnalyticsCard pauses={data.pauses} />
+            </div>
+            <div className="space-y-4">
+              <ContributionSplitCard split={split} />
+              <Card className="rounded-2xl border shadow-sm dashboard-card">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-base text-slate-950">Operational queues</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid gap-3 sm:grid-cols-3">
+                    <PanelMetric
+                      label="Pending payouts"
+                      value={data.queues.pendingPayouts}
+                      hint="Awaiting admin or cycle action"
+                    />
+                    <PanelMetric
+                      label="Pause requests"
+                      value={data.products.thrift.pauseRequestsSubmitted ?? 0}
+                      hint="Submitted from MyContributions"
+                    />
+                    <PanelMetric
+                      label="Active thrift plans"
+                      value={data.products.thrift.activePlans ?? 0}
+                      hint="Currently live contribution plans"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
           </div>
-
-          <Card className="rounded-2xl dashboard-card">
-            <CardHeader>
-              <CardTitle className="text-base">Top risk: missed contributions</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-2">
-              {data.risk.topMissedUsers.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No risk signals right now.</div>
-              ) : (
-                <div className="divide-y rounded-xl border">
-                  {data.risk.topMissedUsers.map((u) => (
-                    <div key={u.userId} className="flex items-center justify-between p-3">
-                      <div className="min-w-0">
-                        <div className="font-medium truncate">
-                          {u.fullName || u.email || u.userId}
-                        </div>
-                        <div className="text-xs text-muted-foreground truncate">
-                          {u.email || "—"} {u.state ? `• ${u.state}` : ""}
-                        </div>
-                      </div>
-                      <div className="text-sm font-semibold">{u.missedCount} missed</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl dashboard-card">
-            <CardHeader>
-              <CardTitle className="text-base">Contribution Split (Admin)</CardTitle>
-            </CardHeader>
-            <CardContent>
-              {!split ? (
-                <div className="text-sm text-muted-foreground">No split report yet.</div>
-              ) : (
-                <div className="grid gap-3 md:grid-cols-3">
-                  <div className="rounded-xl border p-3">
-                    <div className="text-xs text-muted-foreground">Base contribution total</div>
-                    <div className="text-xl font-semibold">{formatMoney(split.totals.baseContributionTotal)}</div>
-                    <div className="text-xs text-muted-foreground">
-                      Settled contributions: {split.totals.contributionsCount}
-                    </div>
-                  </div>
-                  <div className="rounded-xl border p-3">
-                    <div className="text-xs text-muted-foreground">Position interest (net)</div>
-                    <div className="text-xl font-semibold">{formatMoney(split.totals.positionInterestNet)}</div>
-                    <div className="text-xs text-muted-foreground">
-                      Charges: {formatMoney(split.totals.positionInterestCharges)} • Compensation: {formatMoney(split.totals.positionInterestCompensation)}
-                    </div>
-                  </div>
-                  <div className="rounded-xl border p-3">
-                    <div className="text-xs text-muted-foreground">Total charges</div>
-                    <div className="text-xl font-semibold">{formatMoney(split.totals.totalCharges)}</div>
-                    <div className="text-xs text-muted-foreground">
-                      Swap fees: {formatMoney(split.totals.approvedSwapFees)}
-                    </div>
-                  </div>
-                </div>
-              )}
-            </CardContent>
-          </Card>
-
-          <Card className="rounded-2xl dashboard-card">
-            <CardHeader>
-              <CardTitle className="text-base">Pause Analytics</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-3 md:grid-cols-3">
-                <div className="rounded-xl border p-3">
-                  <div className="text-xs text-muted-foreground">Submitted</div>
-                  <div className="text-xl font-semibold">{data.pauses.submittedCount}</div>
-                  <div className="text-xs text-muted-foreground">
-                    Fee total: {formatMoney(data.pauses.submittedFeesTotal)}
-                  </div>
-                </div>
-                <div className="rounded-xl border p-3">
-                  <div className="text-xs text-muted-foreground">Approved</div>
-                  <div className="text-xl font-semibold">{data.pauses.approvedCount}</div>
-                  <div className="text-xs text-muted-foreground">
-                    Fee total: {formatMoney(data.pauses.approvedFeesTotal)}
-                  </div>
-                </div>
-                <div className="rounded-xl border p-3">
-                  <div className="text-xs text-muted-foreground">Rejected</div>
-                  <div className="text-xl font-semibold">{data.pauses.rejectedCount}</div>
-                  <div className="text-xs text-muted-foreground">No fee posted</div>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
         </>
-      )}
+      ) : null}
     </div>
   );
 }

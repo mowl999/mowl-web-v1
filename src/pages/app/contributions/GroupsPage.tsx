@@ -133,7 +133,7 @@ export default function GroupsPage() {
     const target = Number(targetAmount);
     const pref = positionPreference.trim() ? Number(positionPreference) : undefined;
 
-    if (!goalName.trim()) return toast.error("Goal name is required.");
+    if (!goalName.trim()) return toast.error("Plan name is required.");
     if (!Number.isInteger(months) || months < 2 || months > 200) {
       return toast.error("Duration must be between 2 and 200 months.");
     }
@@ -142,7 +142,7 @@ export default function GroupsPage() {
     }
     if (cannotAffordGoal) {
       return toast.error(
-        "You cannot create this goal because remaining capacity is negative. Reduce the monthly contribution amount for this goal."
+        "You cannot create this financial plan because remaining capacity is negative. Reduce the monthly contribution amount for this plan."
       );
     }
     if (pref !== undefined && (!Number.isFinite(pref) || pref < 1 || pref > months)) {
@@ -161,7 +161,7 @@ export default function GroupsPage() {
         ...(pref !== undefined ? { positionPreference: pref } : {}),
       });
 
-      toast.success("Goal plan created");
+      toast.success("Financial plan created");
       setOpen(false);
       resetForm();
 
@@ -171,7 +171,7 @@ export default function GroupsPage() {
       // go to plan details (we’ll build this page next)
       nav(`/app/thrift/goals/${created.id}`, { replace: true });
     } catch (e: any) {
-      toast.error(e?.message || "Failed to create goal");
+      toast.error(e?.message || "Failed to create financial plan");
     } finally {
       setSaving(false);
     }
@@ -181,16 +181,16 @@ export default function GroupsPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-slate-900">MyContributions Goals</h1>
-          <p className="text-sm text-slate-500">Goal-based contributions and payout positions</p>
+          <h1 className="text-xl font-semibold text-slate-900">MyContributions Plans</h1>
+          <p className="text-sm text-slate-500">Financial plans, contribution cycles, and payout positions</p>
         </div>
 
-        <Button onClick={() => setOpen(true)}>Create goal</Button>
+        <Button onClick={() => setOpen(true)}>Create plan</Button>
       </div>
 
       <Card className="rounded-3xl border-sky-100 bg-sky-50/40 shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle className="text-base">Your Goals</CardTitle>
+          <CardTitle className="text-base">Your Plans</CardTitle>
           <Button variant="outline" onClick={load} disabled={loading}>
             Refresh
           </Button>
@@ -201,7 +201,7 @@ export default function GroupsPage() {
             <div className="p-6 text-sm text-muted-foreground">Loading…</div>
           ) : plans.length === 0 ? (
             <div className="p-6 text-sm text-muted-foreground">
-              There is no goal plan yet. Create your first goal.
+              There is no financial plan yet. Create your first plan.
             </div>
           ) : (
             <>
@@ -248,7 +248,7 @@ export default function GroupsPage() {
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
                       <Button variant="default" onClick={() => nav(`/app/thrift/goals/${p.id}`)}>
-                        View goal details
+                        View plan details
                       </Button>
                       <Button variant="outline" onClick={() => nav(`/app/thrift/goals/${p.id}?tab=contributions`)}>
                         Contributions
@@ -275,7 +275,7 @@ export default function GroupsPage() {
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>Create goal plan</DialogTitle>
+            <DialogTitle>Create financial plan</DialogTitle>
             <DialogDescription>
               Define your target amount and monthly contribution. Your payout position will be assigned automatically.
             </DialogDescription>
@@ -283,7 +283,7 @@ export default function GroupsPage() {
 
           <div className="space-y-4">
             <div className="space-y-2">
-              <Label>Goal name</Label>
+              <Label>Plan name</Label>
               <Input
                 value={goalName}
                 onChange={(e) => setGoalName(e.target.value)}
@@ -370,7 +370,7 @@ export default function GroupsPage() {
                 </div>
                 <div className="flex items-center justify-between border-t pt-2">
                   <span className="text-muted-foreground">
-                    Remaining after this goal ({formatMoney(Number(monthlyContribution || 0), currency)}/month)
+                    Remaining after this plan ({formatMoney(Number(monthlyContribution || 0), currency)}/month)
                   </span>
                   <span
                     className={`font-semibold ${
@@ -387,7 +387,7 @@ export default function GroupsPage() {
                 </div>
                 {cannotAffordGoal ? (
                   <div className="rounded-md border border-red-200 bg-red-50 p-2 text-xs text-red-700">
-                    You cannot create this goal because remaining capacity is negative. Reduce the monthly contribution amount for this goal.
+                    You cannot create this financial plan because remaining capacity is negative. Reduce the monthly contribution amount for this plan.
                   </div>
                 ) : null}
                 {shouldShowProfileAction ? (

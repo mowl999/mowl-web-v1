@@ -388,7 +388,7 @@ const payoutEligibilityBlocked = isYourPayoutCycle && paidCyclesForPayout < requ
             {summary?.plan.status && <Badge variant="secondary">{summary.plan.status}</Badge>}
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            Goal plan details: cycle progress, your payout, contributions and payouts.
+            Financial plan details: cycle progress, your payout, contributions and payouts.
           </p>
         </div>
 
@@ -847,7 +847,7 @@ const payoutEligibilityBlocked = isYourPayoutCycle && paidCyclesForPayout < requ
                 {paymentOptions.map((opt) => (
                   <option key={opt.code} value={opt.code} disabled={!opt.availableNow}>
                     {opt.label}
-                    {!opt.availableNow ? " (Coming soon)" : ""}
+                    {!opt.availableNow ? " (Not available right now)" : ""}
                   </option>
                 ))}
               </select>

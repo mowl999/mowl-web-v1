@@ -29,7 +29,7 @@ export default function PayoutsPage() {
       const res = await listPlans(null, 50);
       setPlans(res.items || []);
     } catch (e: any) {
-      toast.error(e?.message || "Failed to load goals");
+      toast.error(e?.message || "Failed to load plans");
     } finally {
       setLoading(false);
     }
@@ -118,14 +118,14 @@ export default function PayoutsPage() {
 
       <Card className="rounded-3xl border-sky-100 bg-sky-50/40 shadow-sm">
         <CardHeader>
-          <CardTitle className="text-base">Your Goal Plans</CardTitle>
+          <CardTitle className="text-base">Your Plans</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
             <div className="p-6 text-sm text-muted-foreground">Loading...</div>
           ) : plans.length === 0 ? (
             <div className="p-6 text-sm text-muted-foreground">
-              No goal plan yet. Create a goal first, then payouts will appear here.
+              No financial plan yet. Create a plan first, then payouts will appear here.
             </div>
           ) : (
             <div className="divide-y">
@@ -253,4 +253,3 @@ export default function PayoutsPage() {
     </div>
   );
 }
-

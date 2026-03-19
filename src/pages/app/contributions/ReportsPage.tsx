@@ -124,7 +124,7 @@ export default function ReportsPage() {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ALL">All goals</SelectItem>
+                <SelectItem value="ALL">All plans</SelectItem>
                 {plans.map((p) => (
                   <SelectItem key={p.id} value={p.id}>
                     {p.name}
@@ -190,7 +190,7 @@ export default function ReportsPage() {
 
       <Card className="rounded-3xl border-sky-100 bg-sky-50/40 shadow-sm">
         <CardHeader>
-          <CardTitle className="text-base">Per-goal Breakdown</CardTitle>
+          <CardTitle className="text-base">Per-plan Breakdown</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (

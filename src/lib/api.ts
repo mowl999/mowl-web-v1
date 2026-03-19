@@ -39,11 +39,13 @@ export async function apiFetch<T = any>(
   init: RequestInit = {}
 ): Promise<T> {
   const token = getToken();
+  const isFormData = typeof FormData !== "undefined" && init.body instanceof FormData;
+  const baseHeaders: Record<string, string> = isFormData ? {} : { "Content-Type": "application/json" };
 
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
-      "Content-Type": "application/json",
+      ...baseHeaders,
       ...(init.headers || {}),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
@@ -86,6 +88,7 @@ export type ProductKey = "THRIFT" | "INVEST" | "LOANS" | "FUND_TRANSFERS" | "ADM
 export type Me = {
   id: string;
   name?: string;
+  fullName?: string;
   firstName?: string | null;
   lastName?: string | null;
   email: string;
@@ -128,6 +131,30 @@ export type UpdateFinancialProfilePayload = {
 export function updateFinancialProfile(payload: UpdateFinancialProfilePayload) {
   return apiFetch<{ ok: boolean; affordability?: any; user?: any }>("/v1/auth/financial-profile", {
     method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export type UpdateProfilePayload = {
+  firstName: string;
+  lastName: string;
+};
+
+export function updateProfile(payload: UpdateProfilePayload) {
+  return apiFetch<{ ok: boolean; user: Me }>("/v1/auth/profile", {
+    method: "PATCH",
+    body: JSON.stringify(payload),
+  });
+}
+
+export type ChangePasswordPayload = {
+  currentPassword: string;
+  newPassword: string;
+};
+
+export function changePassword(payload: ChangePasswordPayload) {
+  return apiFetch<{ ok: boolean; message: string }>("/v1/auth/change-password", {
+    method: "POST",
     body: JSON.stringify(payload),
   });
 }

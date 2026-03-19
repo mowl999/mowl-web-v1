@@ -71,7 +71,12 @@ export default function IncomeProfilePage() {
       yearlyDisposableEstimate: monthlyDisposable * 12,
       maxAllowedMonthly,
     };
-  }, [monthlyIncome, monthlyExpenses, otherMonthlyEarnings, me?.affordability?.limitPct]);
+  }, [
+    monthlyIncome,
+    monthlyExpenses,
+    otherMonthlyEarnings,
+    me?.affordability?.limitPct,
+  ]);
   const trustScore = Number(me?.affordability?.trustScore || 0);
   const trustLabel = trustScore <= 0 ? "NEW" : me?.affordability?.trustLevel ?? "—";
 
@@ -112,7 +117,7 @@ export default function IncomeProfilePage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight text-slate-900">Affordability Summary</h1>
           <p className="text-sm text-slate-500">
-            Income profile + trust score drive your affordability limits during goal creation.
+            Income profile + trust score drive your affordability limits during financial plan creation.
           </p>
         </div>
         <Button variant="outline" onClick={load} disabled={loading}>

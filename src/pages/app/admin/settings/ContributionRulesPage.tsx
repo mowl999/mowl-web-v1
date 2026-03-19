@@ -1,16 +1,13 @@
-import { useEffect, useMemo, useState, type ComponentType } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Banknote, Percent, RefreshCw, Settings2 } from "lucide-react";
 import { toast } from "sonner";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+
 import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import {
-  getCurrentAdminRuleConfig,
-  updateCurrentAdminRuleConfig,
-  type AdminRuleConfig,
-} from "@/lib/adminConfigApi";
-import { listAdminInvestProducts, updateAdminInvestProduct, type InvestmentProduct } from "@/lib/investApi";
+import { getCurrentAdminRuleConfig, updateCurrentAdminRuleConfig, type AdminRuleConfig } from "@/lib/adminConfigApi";
+
+import { AdminSetupIntro, PAYMENT_METHOD_OPTIONS, RuleField, SummaryTile } from "./shared";
 
 type FormState = {
   maxDisposableCommitmentPct: string;
@@ -28,58 +25,6 @@ type FormState = {
   pauseFeePerMonth: string;
   maxPauseMonths: string;
 };
-
-const PAYMENT_METHOD_OPTIONS = [
-  ["CARD", "Card"],
-  ["PAY_BY_BANK", "Pay by Bank"],
-  ["DIRECT_DEBIT", "Direct Debit"],
-  ["BANK_TRANSFER_MANUAL", "Manual Bank Transfer"],
-] as const;
-
-function SummaryTile({
-  label,
-  value,
-  hint,
-  icon: Icon,
-}: {
-  label: string;
-  value: string | number;
-  hint: string;
-  icon: ComponentType<{ className?: string }>;
-}) {
-  return (
-    <Card className="rounded-2xl border shadow-sm dashboard-card">
-      <CardContent className="flex items-start justify-between gap-4 p-5">
-        <div className="space-y-1.5">
-          <div className="text-sm font-medium text-slate-500">{label}</div>
-          <div className="text-3xl font-semibold tracking-tight text-slate-950">{value}</div>
-          <div className="text-xs text-slate-500">{hint}</div>
-        </div>
-        <div className="rounded-xl border border-white/80 bg-indigo-50 p-2.5 shadow-sm">
-          <Icon className="h-5 w-5 text-indigo-700" />
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
-function RuleField({
-  label,
-  children,
-  hint,
-}: {
-  label: string;
-  children: React.ReactNode;
-  hint?: string;
-}) {
-  return (
-    <div className="space-y-2 rounded-xl border bg-white p-4 shadow-sm">
-      <Label className="text-sm font-medium text-slate-700">{label}</Label>
-      {children}
-      {hint ? <div className="text-xs text-slate-500">{hint}</div> : null}
-    </div>
-  );
-}
 
 function toForm(rule: AdminRuleConfig): FormState {
   return {
@@ -105,45 +50,24 @@ function toForm(rule: AdminRuleConfig): FormState {
   };
 }
 
-export default function AdminRulesSettings() {
+export default function ContributionRulesPage() {
   const [rule, setRule] = useState<AdminRuleConfig | null>(null);
   const [form, setForm] = useState<FormState | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [investProducts, setInvestProducts] = useState<InvestmentProduct[]>([]);
-  const [savingInvestId, setSavingInvestId] = useState<string | null>(null);
 
   async function load() {
     setLoading(true);
     try {
-      const [res, investRes] = await Promise.all([getCurrentAdminRuleConfig(), listAdminInvestProducts()]);
+      const res = await getCurrentAdminRuleConfig();
       setRule(res.rule);
       setForm(toForm(res.rule));
-      setInvestProducts(investRes.items || []);
     } catch (e: any) {
-      toast.error(e?.message || "Failed to load rules");
+      toast.error(e?.message || "Failed to load contribution rules");
       setRule(null);
       setForm(null);
     } finally {
       setLoading(false);
-    }
-  }
-
-  async function saveInvestRate(product: InvestmentProduct) {
-    setSavingInvestId(product.id);
-    try {
-      const res = await updateAdminInvestProduct(product.id, {
-        annualRatePct: Number(product.annualRatePct),
-        minMonths: Number(product.minMonths),
-        maxMonths: Number(product.maxMonths),
-        isActive: Boolean(product.isActive),
-      });
-      setInvestProducts((prev) => prev.map((p) => (p.id === product.id ? res.product : p)));
-      toast.success(`${product.name} updated`);
-    } catch (e: any) {
-      toast.error(e?.message || "Failed to update investment product");
-    } finally {
-      setSavingInvestId(null);
     }
   }
 
@@ -174,9 +98,9 @@ export default function AdminRulesSettings() {
       const res = await updateCurrentAdminRuleConfig(payload);
       setRule(res.rule);
       setForm(toForm(res.rule));
-      toast.success("Rules updated");
+      toast.success("Contribution rules updated");
     } catch (e: any) {
-      toast.error(e?.message || "Failed to update rules");
+      toast.error(e?.message || "Failed to update contribution rules");
     } finally {
       setSaving(false);
     }
@@ -195,7 +119,7 @@ export default function AdminRulesSettings() {
       if (!prev) return prev;
       const exists = prev.contributionsEnabledPaymentMethods.includes(method);
       const next = exists
-        ? prev.contributionsEnabledPaymentMethods.filter((m) => m !== method)
+        ? prev.contributionsEnabledPaymentMethods.filter((item) => item !== method)
         : [...prev.contributionsEnabledPaymentMethods, method];
       return { ...prev, contributionsEnabledPaymentMethods: next };
     });
@@ -213,26 +137,36 @@ export default function AdminRulesSettings() {
 
   return (
     <div className="space-y-6">
-      <div className="space-y-1.5">
-        <div className="inline-flex rounded-full border border-indigo-200 bg-indigo-50 px-3 py-1 text-xs font-medium text-indigo-700">
-          Admin Console
-        </div>
-        <h1 className="text-2xl font-semibold tracking-tight text-slate-950">Pricing & rules</h1>
-        <p className="text-sm text-slate-500">Configure contribution charges, affordability controls, payment options, and investment rates.</p>
-      </div>
+      <AdminSetupIntro
+        badge="Admin Setup / MyContributions"
+        title="MyContributions pricing & rules"
+        description="Manage contribution pricing, affordability controls, payment options, and pause behaviour."
+      />
 
       <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         <SummaryTile label="Rule version" value={ruleSummary?.version || "—"} hint="Currently active rule set" icon={Settings2} />
-        <SummaryTile label="Affordability limit" value={rule ? `${Math.round(rule.maxDisposableCommitmentPct * 100)}%` : "—"} hint="Disposable income cap" icon={Percent} />
-        <SummaryTile label="Payment methods" value={ruleSummary?.paymentMethods || 0} hint={`Country ${ruleSummary?.country || "—"}`} icon={Banknote} />
-        <SummaryTile label="Pause feature" value={ruleSummary?.pauseEnabled || "—"} hint="Post-payout contribution pause control" icon={RefreshCw} />
+        <SummaryTile
+          label="Affordability limit"
+          value={rule ? `${Math.round(rule.maxDisposableCommitmentPct * 100)}%` : "—"}
+          hint="Disposable income cap"
+          icon={Percent}
+        />
+        <SummaryTile
+          label="Payment methods"
+          value={ruleSummary?.paymentMethods || 0}
+          hint={`Country ${ruleSummary?.country || "—"}`}
+          icon={Banknote}
+        />
+        <SummaryTile label="Pause feature" value={ruleSummary?.pauseEnabled || "—"} hint="Post-payout pause control" icon={RefreshCw} />
       </div>
 
       <Card className="rounded-2xl border shadow-sm dashboard-card">
         <CardHeader className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <CardTitle className="text-base text-slate-950">Contribution rules</CardTitle>
-            <p className="mt-1 text-sm text-slate-500">Manage pricing, swap behaviour, penalties, and affordability checks for MyContributions.</p>
+            <p className="mt-1 text-sm text-slate-500">
+              Configure pricing, swap behaviour, penalties, affordability checks, and payment availability.
+            </p>
           </div>
           <Button variant="outline" className="bg-white" onClick={load} disabled={loading || saving}>
             Refresh
@@ -240,7 +174,7 @@ export default function AdminRulesSettings() {
         </CardHeader>
         <CardContent>
           {loading || !form ? (
-            <div className="rounded-2xl border bg-white px-4 py-6 text-sm text-slate-500">Loading rules…</div>
+            <div className="rounded-2xl border bg-white px-4 py-6 text-sm text-slate-500">Loading contribution rules…</div>
           ) : (
             <div className="space-y-4">
               <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
@@ -274,10 +208,10 @@ export default function AdminRulesSettings() {
               </div>
 
               <div className="grid gap-4 lg:grid-cols-[0.7fr_1.3fr]">
-                <RuleField label="Country code (MyContributions)" hint="Used to load country-specific payment methods">
+                <RuleField label="Country code" hint="Used to load country-specific payment methods for MyContributions">
                   <Input value={form.contributionsCountryCode} onChange={(e) => setField("contributionsCountryCode", e.target.value)} placeholder="GB" maxLength={2} />
                 </RuleField>
-                <RuleField label="Enabled payment methods" hint="Choose which payment methods should appear in MyContributions">
+                <RuleField label="Enabled payment methods" hint="Choose which payment methods should appear for contribution funding">
                   <div className="grid gap-2 sm:grid-cols-2">
                     {PAYMENT_METHOD_OPTIONS.map(([code, label]) => (
                       <label key={code} className="flex items-center gap-2 rounded-lg border bg-slate-50 px-3 py-2 text-sm">
@@ -313,90 +247,6 @@ export default function AdminRulesSettings() {
                   {saving ? "Saving..." : "Save rules"}
                 </Button>
               </div>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-
-      <Card className="rounded-2xl border shadow-sm dashboard-card">
-        <CardHeader>
-          <CardTitle className="text-base text-slate-950">Investment product rates</CardTitle>
-          <p className="text-sm text-slate-500">Update base rates and duration bounds for each investment product.</p>
-        </CardHeader>
-        <CardContent>
-          {loading ? (
-            <div className="rounded-2xl border bg-white px-4 py-6 text-sm text-slate-500">Loading investment products…</div>
-          ) : investProducts.length === 0 ? (
-            <div className="rounded-2xl border border-dashed bg-slate-50 px-4 py-6 text-sm text-slate-500">No investment products available.</div>
-          ) : (
-            <div className="space-y-3">
-              {investProducts.map((product) => (
-                <div key={product.id} className="rounded-2xl border bg-white p-4 shadow-sm">
-                  <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
-                    <div>
-                      <div className="text-sm font-semibold text-slate-950">{product.name}</div>
-                      <div className="mt-1 text-xs text-slate-500">{product.key}</div>
-                    </div>
-                    <label className="inline-flex items-center gap-2 rounded-lg border bg-slate-50 px-3 py-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={Boolean(product.isActive)}
-                        onChange={(e) =>
-                          setInvestProducts((prev) =>
-                            prev.map((p) => (p.id === product.id ? { ...p, isActive: e.target.checked } : p))
-                          )
-                        }
-                      />
-                      <span>Active</span>
-                    </label>
-                  </div>
-
-                  <div className="mt-4 grid gap-4 md:grid-cols-3">
-                    <RuleField label="Annual rate %">
-                      <Input
-                        type="number"
-                        step="0.01"
-                        value={product.annualRatePct}
-                        onChange={(e) =>
-                          setInvestProducts((prev) =>
-                            prev.map((p) => (p.id === product.id ? { ...p, annualRatePct: Number(e.target.value) } : p))
-                          )
-                        }
-                      />
-                    </RuleField>
-                    <RuleField label="Min months">
-                      <Input
-                        type="number"
-                        step="1"
-                        value={product.minMonths}
-                        onChange={(e) =>
-                          setInvestProducts((prev) =>
-                            prev.map((p) => (p.id === product.id ? { ...p, minMonths: Number(e.target.value) } : p))
-                          )
-                        }
-                      />
-                    </RuleField>
-                    <RuleField label="Max months">
-                      <Input
-                        type="number"
-                        step="1"
-                        value={product.maxMonths}
-                        onChange={(e) =>
-                          setInvestProducts((prev) =>
-                            prev.map((p) => (p.id === product.id ? { ...p, maxMonths: Number(e.target.value) } : p))
-                          )
-                        }
-                      />
-                    </RuleField>
-                  </div>
-
-                  <div className="mt-4 flex justify-end">
-                    <Button size="sm" variant="outline" disabled={savingInvestId === product.id} onClick={() => saveInvestRate(product)}>
-                      {savingInvestId === product.id ? "Saving..." : "Save product"}
-                    </Button>
-                  </div>
-                </div>
-              ))}
             </div>
           )}
         </CardContent>

@@ -36,7 +36,7 @@ function Tile({
           </div>
           {comingSoon ? (
             <span className="rounded-full border border-indigo-200 bg-indigo-50 px-2.5 py-1 text-[11px] font-medium uppercase tracking-wide text-indigo-700">
-              Coming soon
+              Not available right now
             </span>
           ) : null}
         </div>
@@ -52,7 +52,7 @@ function Tile({
           variant={comingSoon ? "outline" : hasAccess ? "default" : "outline"}
           disabled={comingSoon}
         >
-          {comingSoon ? "Coming soon" : hasAccess ? "Open" : "Access required"}
+          {comingSoon ? "Unavailable" : hasAccess ? "Open" : "Access required"}
         </Button>
       </CardContent>
     </Card>
@@ -101,7 +101,6 @@ export default function WorkspaceSelectPage() {
       icon: <BadgeDollarSign className="h-5 w-5" />,
       to: "/app/loans",
       hasAccess: entitlements.includes("LOANS"),
-      comingSoon: true,
     },
     {
       key: "FUND_TRANSFERS",
@@ -112,7 +111,12 @@ export default function WorkspaceSelectPage() {
       hasAccess: entitlements.includes("FUND_TRANSFERS"),
       comingSoon: true,
     },
-  ];
+  ].sort((a, b) => {
+    const aRank = a.comingSoon ? 2 : a.hasAccess ? 0 : 1;
+    const bRank = b.comingSoon ? 2 : b.hasAccess ? 0 : 1;
+    if (aRank !== bRank) return aRank - bRank;
+    return a.title.localeCompare(b.title);
+  });
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-12">
@@ -143,7 +147,7 @@ export default function WorkspaceSelectPage() {
             comingSoon={t.comingSoon}
             onOpen={() => {
               if (t.comingSoon) {
-                toast.message(`${t.title} is coming soon.`);
+                toast.message(`${t.title} is not available right now.`);
                 return;
               }
               if (!t.hasAccess) {

@@ -76,7 +76,7 @@ export default function ContributionsPage() {
         setSummaries(Object.fromEntries(rows));
       }
     } catch (e: any) {
-      toast.error(e?.message || "Failed to load goals");
+      toast.error(e?.message || "Failed to load plans");
     } finally {
       setLoading(false);
     }
@@ -91,7 +91,7 @@ export default function ContributionsPage() {
       <div className="flex items-start justify-between gap-4">
         <div>
           <h1 className="text-xl font-semibold text-slate-900">Contributions</h1>
-          <p className="text-sm text-slate-500">Choose a goal to view and manage contribution payments.</p>
+          <p className="text-sm text-slate-500">Choose a financial plan to view and manage contribution payments.</p>
         </div>
         <Button variant="outline" onClick={load} disabled={loading}>
           Refresh
@@ -100,14 +100,14 @@ export default function ContributionsPage() {
 
       <Card className="rounded-3xl border-sky-100 bg-sky-50/40 shadow-sm">
         <CardHeader>
-          <CardTitle className="text-base">Your Goal Plans</CardTitle>
+          <CardTitle className="text-base">Your Plans</CardTitle>
         </CardHeader>
         <CardContent className="p-0">
           {loading ? (
             <div className="p-6 text-sm text-muted-foreground">Loading...</div>
           ) : plans.length === 0 ? (
             <div className="p-6 text-sm text-muted-foreground">
-              No goal plan yet. Create a goal first, then contributions will appear here.
+              No financial plan yet. Create a plan first, then contributions will appear here.
             </div>
           ) : (
             <div className="divide-y">
